@@ -1,3 +1,5 @@
+// https://gist.github.com/mitchellh/0ee168fb34915e96159b558b89c9a74b
+
 //! A zig builder step that runs "lipo" on two binaries to create
 //! a universal binary.
 const LipoStep = @This();

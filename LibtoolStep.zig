@@ -1,3 +1,5 @@
+// https://gist.github.com/mitchellh/0ee168fb34915e96159b558b89c9a74b
+
 //! A zig builder step that runs "libtool" against a list of libraries
 //! in order to create a single combined static library.
 const LibtoolStep = @This();
@@ -5,7 +7,7 @@ const LibtoolStep = @This();
 const std = @import("std");
 const Step = std.Build.Step;
 const RunStep = std.Build.Step.Run;
-const FileSource = std.Build.LazyPath;
+const LazyPath = std.Build.LazyPath;
 
 pub const Options = struct {
     /// The name of this step.
@@ -16,14 +18,14 @@ pub const Options = struct {
     out_name: []const u8,
 
     /// Library files (.a) to combine.
-    sources: []const FileSource,
+    sources: []const LazyPath,
 };
 
 /// The step to depend on.
 step: *Step,
 
 /// The output file from the libtool run.
-output: FileSource,
+output: LazyPath,
 
 /// Run libtool against a list of library files to combine into a single
 /// static library.

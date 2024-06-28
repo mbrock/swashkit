@@ -1,3 +1,5 @@
+// https://gist.github.com/mitchellh/0ee168fb34915e96159b558b89c9a74b
+
 //! A zig builder step that runs "swift build" in the context of
 //! a Swift project managed with SwiftPM. This is primarily meant to build
 //! executables currently since that is what we build.
@@ -6,7 +8,7 @@ const XCFrameworkStep = @This();
 const std = @import("std");
 const Step = std.Build.Step;
 const RunStep = std.Build.Step.Run;
-const FileSource = std.Build.LazyPath;
+const LazyPath = std.Build.LazyPath;
 
 pub const Options = struct {
     /// The name of the xcframework to create.
