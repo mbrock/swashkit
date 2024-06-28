@@ -1,0 +1,4 @@
+module SwashKit {
+    umbrella header "mic.h"
+    export *
+}
