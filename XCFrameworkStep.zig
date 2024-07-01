@@ -8,6 +8,10 @@ const LazyPath = std.Build.LazyPath;
 pub const XCFrameworkStep = struct {
     step: Step,
 
+    pub fn getStep(self: *XCFrameworkStep) *Step {
+        return &self.step;
+    }
+
     pub const Options = struct {
         /// The name of the xcframework to create.
         name: []const u8,
@@ -57,9 +61,6 @@ pub const XCFrameworkStep = struct {
     }
 };
 
-pub fn getStep(self: *XCFrameworkStep) *Step {
-    return &self.step;
-}
 
 pub const LipoStep = struct {
     step: *Step,
