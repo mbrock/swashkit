@@ -10,7 +10,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 
     const xcframework = setupFrameworkBuildStep(b, optimize, deps);
-    b.step("xcframework", "Create XCFramework").dependOn(xcframework.step);
+    b.step("xcframework", "Create XCFramework").dependOn(xcframework.getStep());
 
     const exe = b.addExecutable(.{
         .name = "swash",
@@ -27,7 +27,7 @@ fn setupFrameworkBuildStep(
     b: *std.Build,
     optimize: std.builtin.OptimizeMode,
     deps: anytype,
-) *XCFrameworkStep {
+) *XCFrameworkStep.XCFrameworkStep {
     const mac_libs = createMacLibs(b, optimize, deps);
     const universal_lib = createUniversalBinary(b, mac_libs.aarch64, mac_libs.x86_64);
     const libtool = createLibtoolBundle(b, universal_lib, deps);
