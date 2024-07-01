@@ -10,7 +10,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 
     const xcframework = setupFrameworkBuildStep(b, optimize, deps);
-    b.step("xcframework", "Create XCFramework").dependOn(xcframework.getStep());
+    b.step("xcframework", "Create XCFramework").dependOn(xcframework.step);
 
     const exe = b.addExecutable(.{
         .name = "swash",

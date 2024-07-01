@@ -16,24 +16,21 @@ pub const Signal = enum(c_int) {
     Music = c.OPUS_SIGNAL_MUSIC,
 };
 
-pub const Callbacks = c.OpusEncCallbacks;
+// pub const Callbacks = c.OpusEncCallbacks;
 
 enc: ?*c.OggOpusEnc = null,
-callbacks: c.OpusEncCallbacks,
+
+//callbacks: c.OpusEncCallbacks,
 
 pub fn init(
     self: *Self,
     sampleRate: u32,
     channels: u32,
     family: c_int,
-    arg: ?*anyopaque,
-    fun: ?*const anyopaque,
 ) !void {
     var err: c_int = undefined;
 
-    self.enc = c.ope_encoder_create_callbacks(
-        &self.callbacks,
-        arg,
+    self.enc = c.ope_encoder_create_pull(
         c.ope_comments_create(),
         @intCast(sampleRate),
         @intCast(channels),
@@ -41,11 +38,11 @@ pub fn init(
         &err,
     );
 
-    if (c.ope_encoder_ctl(self.enc, c.OPE_SET_PACKET_CALLBACK_REQUEST, fun, arg) != c.OPE_OK) {
-        return error.SetPacketCallbackFailed;
-    }
+    // if (c.ope_encoder_ctl(self.enc, c.OPE_SET_PACKET_CALLBACK_REQUEST, fun, arg) != c.OPE_OK) {
+    //     return error.SetPacketCallbackFailed;
+    // }
 
-    self.callbacks.write = null;
+    // self.callbacks.write = null;
 
     if (self.enc == null) {
         return error.EncoderCreationFailed;
@@ -59,10 +56,19 @@ pub fn free(self: *Self) void {
     }
 }
 
-pub fn work(self: *Self, pcm: [*]const f32, frameCount: usize) !void {
+pub fn work(self: *Self, pcm: [*]const f32, frameCount: usize) ![]const u8 {
     if (c.ope_encoder_write_float(self.enc, pcm, @intCast(frameCount)) != c.OPE_OK) {
         return error.EncodingFailed;
     }
+
+    var page: [*c]u8 = undefined;
+    var len: i32 = undefined;
+
+    if (c.ope_encoder_get_page(self.enc, &page, &len, 1) != 1) {
+        return error.GetPageFailed;
+    }
+
+    return page[0..@intCast(len)];
 }
 
 pub fn stop(self: *Self) !void {

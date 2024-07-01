@@ -6,11 +6,7 @@ const RunStep = std.Build.Step.Run;
 const LazyPath = std.Build.LazyPath;
 
 pub const XCFrameworkStep = struct {
-    step: Step,
-
-    pub fn getStep(self: *XCFrameworkStep) *Step {
-        return &self.step;
-    }
+    step: *Step,
 
     pub const Options = struct {
         /// The name of the xcframework to create.
@@ -54,13 +50,12 @@ pub const XCFrameworkStep = struct {
         run_create.step.dependOn(&run_delete.step);
 
         self.* = .{
-            .step = run_create.step,
+            .step = &run_create.step,
         };
 
         return self;
     }
 };
-
 
 pub const LipoStep = struct {
     step: *Step,

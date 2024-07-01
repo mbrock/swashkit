@@ -37,15 +37,10 @@ pub fn create(
         .dev = undefined,
         .cfg = null,
         .mic = null,
-        .enc = .{
-            .callbacks = .{
-                .write = handleOggPage,
-                .close = handleOpusClose,
-            },
-        },
+        .enc = Opus{},
     };
 
-    try ctx.enc.init(48000, 2, 0, ctx, handleOpusPacket);
+    try ctx.enc.init(48000, 2, 0);
     try ctx.enc.setApplication(Opus.Application.VoIP);
     try ctx.enc.setSignal(Opus.Signal.Voice);
     try ctx.enc.setBitrate(32000);
@@ -142,10 +137,13 @@ fn onAudioData(
     const ctx = @as(*Ctx, @ptrCast(@alignCast(device[0].pUserData)));
     ctx.pcm = @as([*]const f32, @ptrCast(@alignCast(input)))[0..frame_count];
 
-    ctx.enc.work(ctx.pcm.ptr, ctx.pcm.len) catch |err| {
+    const page = ctx.enc.work(ctx.pcm.ptr, ctx.pcm.len) catch |err| {
         std.debug.print("Audio encoding error: {}\n", .{err});
         @panic("Audio encoding failed");
     };
+
+    ctx.buf = page;
+    if (ctx.fun) |fun| fun(ctx);
 }
 
 fn handleOggPage(
@@ -167,9 +165,13 @@ fn handleOpusPacket(
     flags: c_int,
 ) callconv(.C) c_int {
     _ = flags; // autofix
-    const ctx = @as(*Ctx, @ptrCast(@alignCast(ptr)));
-    ctx.buf = data[0..@intCast(frame_count)];
-    if (ctx.fun) |callback| callback(ctx);
+    _ = frame_count; // autofix
+    _ = data; // autofix
+    _ = ptr; // autofix
+    // _ = flags; // autofix
+    // const ctx = @as(*Ctx, @ptrCast(@alignCast(ptr)));
+    // ctx.buf = data[0..@intCast(frame_count)];
+    // if (ctx.fun) |callback| callback(ctx);
     return 0;
 }
 
