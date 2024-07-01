@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) void {
     const lib = createStaticLib(b, null, optimize, deps);
     b.installArtifact(lib);
 
-    const xcframework_builder = XCFrameworkStep.XCFrameworkBuilder.init(
+    var xcframework_builder = XCFrameworkStep.XCFrameworkBuilder.init(
         b,
         "SwashKit",
         optimize,
@@ -21,22 +21,9 @@ pub fn build(b: *std.Build) void {
             b.fmt("{s}", .{deps.opus.artifact("opus").getEmittedBin().getPath(b)}),
         },
     );
+
     const xcframework = xcframework_builder.build();
     b.step("xcframework", "Create XCFramework").dependOn(xcframework.step);
-
-    fn configureXCFrameworkLib(lib: *std.Build.Step.Compile, builder: *XCFrameworkStep.XCFrameworkBuilder) void {
-        lib.bundle_compiler_rt = true;
-        lib.linkLibC();
-        lib.addCSourceFile(.{ .file = .{ .path = "src/miniaudio.c" } });
-        lib.addIncludePath(.{ .path = "src" });
-
-        if (lib.rootModuleTarget().isDarwin()) {
-            lib.addSystemIncludePath(.{ .path = deps.macsdk.path("include").getPath(b) });
-            lib.addSystemFrameworkPath(.{ .path = deps.macsdk.path("Frameworks").getPath(b) });
-            lib.addLibraryPath(.{ .path = deps.macsdk.path("lib").getPath(b) });
-            lib.linkFramework("CoreAudio");
-        }
-    }
 
     const exe = b.addExecutable(.{
         .name = "swash",
@@ -47,6 +34,20 @@ pub fn build(b: *std.Build) void {
 
     configureExe(b, exe, deps);
     b.installArtifact(exe);
+}
+
+fn configureXCFrameworkLib(lib: *std.Build.Step.Compile, builder: *XCFrameworkStep.XCFrameworkBuilder, target: std.Build.ResolvedTarget) void {
+    lib.addCSourceFile(.{ .file = builder.b.path("src/miniaudio.c") });
+    lib.addIncludePath(builder.b.path("src"));
+
+    const deps = getDependencies(builder.b, target);
+
+    if (target.result.isDarwin()) {
+        lib.addSystemIncludePath(deps.macsdk.path("include"));
+        lib.addSystemFrameworkPath(deps.macsdk.path("Frameworks"));
+        lib.addLibraryPath(deps.macsdk.path("lib"));
+        lib.linkFramework("CoreAudio");
+    }
 }
 
 fn getDependencies(b: *std.Build, target: std.Build.ResolvedTarget) struct {

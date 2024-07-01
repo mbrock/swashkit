@@ -10,7 +10,7 @@ pub const XCFrameworkBuilder = struct {
     name: []const u8,
     optimize: std.builtin.OptimizeMode,
     root_source_file: []const u8,
-    configure_lib: fn (*std.Build.Step.Compile, *XCFrameworkBuilder) void,
+    configure_lib: *const fn (*std.Build.Step.Compile, *XCFrameworkBuilder, std.Build.ResolvedTarget) void,
     libtool_sources: []const []const u8,
 
     pub fn init(
@@ -18,7 +18,7 @@ pub const XCFrameworkBuilder = struct {
         name: []const u8,
         optimize: std.builtin.OptimizeMode,
         root_source_file: []const u8,
-        configure_lib: fn (*std.Build.Step.Compile, *XCFrameworkBuilder) void,
+        configure_lib: fn (*std.Build.Step.Compile, *XCFrameworkBuilder, std.Build.ResolvedTarget) void,
         libtool_sources: []const []const u8,
     ) XCFrameworkBuilder {
         return .{
@@ -48,11 +48,15 @@ pub const XCFrameworkBuilder = struct {
         const target = self.b.resolveTargetQuery(target_query);
         const lib = self.b.addStaticLibrary(.{
             .name = self.b.fmt("{s}-{s}", .{ self.name, target.result.osArchName() }),
-            .root_source_file = .{ .path = self.root_source_file },
+            .root_source_file = self.b.path(self.root_source_file),
             .target = target,
             .optimize = self.optimize,
         });
-        self.configure_lib(lib, self);
+
+        lib.bundle_compiler_rt = true;
+        lib.linkLibC();
+
+        self.configure_lib(lib, self, target);
         return lib;
     }
 
@@ -71,7 +75,7 @@ pub const XCFrameworkBuilder = struct {
         var sources = std.ArrayList(std.Build.LazyPath).init(self.b.allocator);
         sources.append(universal_lib.output) catch unreachable;
         for (self.libtool_sources) |source| {
-            sources.append(.{ .path = source }) catch unreachable;
+            sources.append(self.b.path(source)) catch unreachable;
         }
 
         const libtool = LibtoolStep.create(self.b, .{
@@ -90,7 +94,7 @@ pub const XCFrameworkBuilder = struct {
             .name = self.name,
             .out_path = self.b.fmt("build/{s}.xcframework", .{self.name}),
             .library = libtool.output,
-            .headers = .{ .path = "include" },
+            .headers = self.b.path("include"),
         });
         xcframework.step.dependOn(libtool.step);
 
