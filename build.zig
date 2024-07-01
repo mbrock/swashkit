@@ -1,7 +1,5 @@
 const std = @import("std");
-const LibtoolStep = @import("./LibtoolStep.zig");
 const XCFrameworkStep = @import("./XCFrameworkStep.zig");
-const LipoStep = @import("./LipoStep.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -91,8 +89,8 @@ fn createUniversalBinary(
     b: *std.Build,
     lib_aarch64: *std.Build.Step.Compile,
     lib_x86_64: *std.Build.Step.Compile,
-) *LipoStep {
-    return LipoStep.create(b, .{
+) *XCFrameworkStep.LipoStep {
+    return XCFrameworkStep.LipoStep.create(b, .{
         .name = "swash-universal",
         .out_name = "libswash.a",
         .input_a = lib_aarch64.getEmittedBin(),
@@ -121,8 +119,8 @@ fn configureMacFrameworks(lib: *std.Build.Step.Compile, deps: anytype) void {
     lib.linkFramework("CoreAudio");
 }
 
-fn createLibtoolBundle(b: *std.Build, universal_lib: *LipoStep, deps: anytype) *LibtoolStep {
-    const libtool = LibtoolStep.create(b, .{
+fn createLibtoolBundle(b: *std.Build, universal_lib: *XCFrameworkStep.LipoStep, deps: anytype) *XCFrameworkStep.LibtoolStep {
+    const libtool = XCFrameworkStep.LibtoolStep.create(b, .{
         .name = "swash",
         .out_name = "swash-bundle.a",
         .sources = &[_]std.Build.LazyPath{
@@ -138,8 +136,8 @@ fn createLibtoolBundle(b: *std.Build, universal_lib: *LipoStep, deps: anytype) *
     return libtool;
 }
 
-fn createXCFramework(b: *std.Build, libtool: *LibtoolStep) *XCFrameworkStep {
-    const xcframework = XCFrameworkStep.create(b, .{
+fn createXCFramework(b: *std.Build, libtool: *XCFrameworkStep.LibtoolStep) *XCFrameworkStep.XCFrameworkStep {
+    const xcframework = XCFrameworkStep.XCFrameworkStep.create(b, .{
         .name = "SwashKit",
         .out_path = "build/SwashKit.xcframework",
         .library = libtool.output,
