@@ -68,9 +68,8 @@ pub const LipoStep = struct {
         /// The filename (not the path) of the file to create.
         out_name: []const u8,
 
-        /// Library file (dylib, a) to package.
-        input_a: LazyPath,
-        input_b: LazyPath,
+        /// Library files (dylib, a) to package.
+        inputs: []const LazyPath,
     };
 
     pub fn create(b: *std.Build, opts: Options) *LipoStep {
@@ -79,8 +78,9 @@ pub const LipoStep = struct {
         const run_step = RunStep.create(b, b.fmt("lipo {s}", .{opts.name}));
         run_step.addArgs(&.{ "lipo", "-create", "-output" });
         const output = run_step.addOutputFileArg(opts.out_name);
-        run_step.addFileArg(opts.input_a);
-        run_step.addFileArg(opts.input_b);
+        for (opts.inputs) |input| {
+            run_step.addFileArg(input);
+        }
 
         self.* = .{
             .step = &run_step.step,

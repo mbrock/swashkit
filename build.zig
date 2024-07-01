@@ -93,8 +93,10 @@ fn createUniversalBinary(
     return XCFrameworkStep.LipoStep.create(b, .{
         .name = "swash-universal",
         .out_name = "libswash.a",
-        .input_a = lib_aarch64.getEmittedBin(),
-        .input_b = lib_x86_64.getEmittedBin(),
+        .inputs = &[_]std.Build.LazyPath{
+            lib_aarch64.getEmittedBin(),
+            lib_x86_64.getEmittedBin(),
+        },
     });
 }
 
