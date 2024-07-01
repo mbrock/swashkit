@@ -9,9 +9,34 @@ pub fn build(b: *std.Build) void {
     const lib = createStaticLib(b, null, optimize, deps);
     b.installArtifact(lib);
 
-    const xcframework_builder = XCFrameworkStep.XCFrameworkBuilder.init(b, "SwashKit", optimize, deps);
+    const xcframework_builder = XCFrameworkStep.XCFrameworkBuilder.init(
+        b,
+        "SwashKit",
+        optimize,
+        "src/mic.zig",
+        configureXCFrameworkLib,
+        &[_][]const u8{
+            b.fmt("{s}", .{deps.opusenc.artifact("opusenc").getEmittedBin().getPath(b)}),
+            b.fmt("{s}", .{deps.opusfile.artifact("opusfile").getEmittedBin().getPath(b)}),
+            b.fmt("{s}", .{deps.opus.artifact("opus").getEmittedBin().getPath(b)}),
+        },
+    );
     const xcframework = xcframework_builder.build();
     b.step("xcframework", "Create XCFramework").dependOn(xcframework.step);
+
+    fn configureXCFrameworkLib(lib: *std.Build.Step.Compile, builder: *XCFrameworkStep.XCFrameworkBuilder) void {
+        lib.bundle_compiler_rt = true;
+        lib.linkLibC();
+        lib.addCSourceFile(.{ .file = .{ .path = "src/miniaudio.c" } });
+        lib.addIncludePath(.{ .path = "src" });
+
+        if (lib.rootModuleTarget().isDarwin()) {
+            lib.addSystemIncludePath(.{ .path = deps.macsdk.path("include").getPath(b) });
+            lib.addSystemFrameworkPath(.{ .path = deps.macsdk.path("Frameworks").getPath(b) });
+            lib.addLibraryPath(.{ .path = deps.macsdk.path("lib").getPath(b) });
+            lib.linkFramework("CoreAudio");
+        }
+    }
 
     const exe = b.addExecutable(.{
         .name = "swash",

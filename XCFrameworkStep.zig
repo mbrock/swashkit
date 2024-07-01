@@ -9,14 +9,25 @@ pub const XCFrameworkBuilder = struct {
     b: *std.Build,
     name: []const u8,
     optimize: std.builtin.OptimizeMode,
-    deps: anytype,
+    root_source_file: []const u8,
+    configure_lib: fn (*std.Build.Step.Compile, *XCFrameworkBuilder) void,
+    libtool_sources: []const []const u8,
 
-    pub fn init(b: *std.Build, name: []const u8, optimize: std.builtin.OptimizeMode, deps: anytype) XCFrameworkBuilder {
+    pub fn init(
+        b: *std.Build,
+        name: []const u8,
+        optimize: std.builtin.OptimizeMode,
+        root_source_file: []const u8,
+        configure_lib: fn (*std.Build.Step.Compile, *XCFrameworkBuilder) void,
+        libtool_sources: []const []const u8,
+    ) XCFrameworkBuilder {
         return .{
             .b = b,
             .name = name,
             .optimize = optimize,
-            .deps = deps,
+            .root_source_file = root_source_file,
+            .configure_lib = configure_lib,
+            .libtool_sources = libtool_sources,
         };
     }
 
@@ -37,33 +48,12 @@ pub const XCFrameworkBuilder = struct {
         const target = self.b.resolveTargetQuery(target_query);
         const lib = self.b.addStaticLibrary(.{
             .name = self.b.fmt("{s}-{s}", .{ self.name, target.result.osArchName() }),
-            .root_source_file = self.b.path("src/mic.zig"),
+            .root_source_file = .{ .path = self.root_source_file },
             .target = target,
             .optimize = self.optimize,
         });
-        self.configureLib(lib);
+        self.configure_lib(lib, self);
         return lib;
-    }
-
-    fn configureLib(self: *XCFrameworkBuilder, lib: *std.Build.Step.Compile) void {
-        lib.bundle_compiler_rt = true;
-        lib.linkLibC();
-        lib.linkLibrary(self.deps.opusenc.artifact("opusenc"));
-        lib.linkLibrary(self.deps.opusfile.artifact("opusfile"));
-        lib.linkLibrary(self.deps.opus.artifact("opus"));
-        lib.addCSourceFile(.{ .file = self.b.path("src/miniaudio.c") });
-        lib.addIncludePath(self.b.path("src"));
-
-        if (lib.rootModuleTarget().isDarwin()) {
-            self.configureMacFrameworks(lib);
-        }
-    }
-
-    fn configureMacFrameworks(self: *XCFrameworkBuilder, lib: *std.Build.Step.Compile) void {
-        lib.addSystemIncludePath(self.deps.macsdk.path("include"));
-        lib.addSystemFrameworkPath(self.deps.macsdk.path("Frameworks"));
-        lib.addLibraryPath(self.deps.macsdk.path("lib"));
-        lib.linkFramework("CoreAudio");
     }
 
     fn createUniversalBinary(self: *XCFrameworkBuilder, lib_aarch64: *std.Build.Step.Compile, lib_x86_64: *std.Build.Step.Compile) *LipoStep {
@@ -78,15 +68,16 @@ pub const XCFrameworkBuilder = struct {
     }
 
     fn createLibtoolBundle(self: *XCFrameworkBuilder, universal_lib: *LipoStep) *LibtoolStep {
+        var sources = std.ArrayList(std.Build.LazyPath).init(self.b.allocator);
+        sources.append(universal_lib.output) catch unreachable;
+        for (self.libtool_sources) |source| {
+            sources.append(.{ .path = source }) catch unreachable;
+        }
+
         const libtool = LibtoolStep.create(self.b, .{
             .name = self.name,
             .out_name = self.b.fmt("{s}-bundle.a", .{self.name}),
-            .sources = &[_]std.Build.LazyPath{
-                universal_lib.output,
-                self.deps.opusenc.artifact("opusenc").getEmittedBin(),
-                self.deps.opusfile.artifact("opusfile").getEmittedBin(),
-                self.deps.opus.artifact("opus").getEmittedBin(),
-            },
+            .sources = sources.items,
         });
 
         libtool.step.dependOn(universal_lib.step);
@@ -99,7 +90,7 @@ pub const XCFrameworkBuilder = struct {
             .name = self.name,
             .out_path = self.b.fmt("build/{s}.xcframework", .{self.name}),
             .library = libtool.output,
-            .headers = self.b.path("include"),
+            .headers = .{ .path = "include" },
         });
         xcframework.step.dependOn(libtool.step);
 
