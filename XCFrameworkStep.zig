@@ -5,6 +5,108 @@ const Step = std.Build.Step;
 const RunStep = std.Build.Step.Run;
 const LazyPath = std.Build.LazyPath;
 
+pub const XCFrameworkBuilder = struct {
+    b: *std.Build,
+    name: []const u8,
+    optimize: std.builtin.OptimizeMode,
+    deps: anytype,
+
+    pub fn init(b: *std.Build, name: []const u8, optimize: std.builtin.OptimizeMode, deps: anytype) XCFrameworkBuilder {
+        return .{
+            .b = b,
+            .name = name,
+            .optimize = optimize,
+            .deps = deps,
+        };
+    }
+
+    pub fn build(self: *XCFrameworkBuilder) *XCFrameworkStep {
+        const mac_libs = self.createMacLibs();
+        const universal_lib = self.createUniversalBinary(mac_libs.aarch64, mac_libs.x86_64);
+        const libtool = self.createLibtoolBundle(universal_lib);
+        return self.createXCFramework(libtool);
+    }
+
+    fn createMacLibs(self: *XCFrameworkBuilder) struct { aarch64: *std.Build.Step.Compile, x86_64: *std.Build.Step.Compile } {
+        const lib_aarch64 = self.createStaticLib(.{ .cpu_arch = .aarch64, .os_tag = .macos });
+        const lib_x86_64 = self.createStaticLib(.{ .cpu_arch = .x86_64, .os_tag = .macos });
+        return .{ .aarch64 = lib_aarch64, .x86_64 = lib_x86_64 };
+    }
+
+    fn createStaticLib(self: *XCFrameworkBuilder, target_query: std.zig.CrossTarget) *std.Build.Step.Compile {
+        const target = self.b.resolveTargetQuery(target_query);
+        const lib = self.b.addStaticLibrary(.{
+            .name = self.b.fmt("{s}-{s}", .{ self.name, target.result.osArchName() }),
+            .root_source_file = self.b.path("src/mic.zig"),
+            .target = target,
+            .optimize = self.optimize,
+        });
+        self.configureLib(lib);
+        return lib;
+    }
+
+    fn configureLib(self: *XCFrameworkBuilder, lib: *std.Build.Step.Compile) void {
+        lib.bundle_compiler_rt = true;
+        lib.linkLibC();
+        lib.linkLibrary(self.deps.opusenc.artifact("opusenc"));
+        lib.linkLibrary(self.deps.opusfile.artifact("opusfile"));
+        lib.linkLibrary(self.deps.opus.artifact("opus"));
+        lib.addCSourceFile(.{ .file = self.b.path("src/miniaudio.c") });
+        lib.addIncludePath(self.b.path("src"));
+
+        if (lib.rootModuleTarget().isDarwin()) {
+            self.configureMacFrameworks(lib);
+        }
+    }
+
+    fn configureMacFrameworks(self: *XCFrameworkBuilder, lib: *std.Build.Step.Compile) void {
+        lib.addSystemIncludePath(self.deps.macsdk.path("include"));
+        lib.addSystemFrameworkPath(self.deps.macsdk.path("Frameworks"));
+        lib.addLibraryPath(self.deps.macsdk.path("lib"));
+        lib.linkFramework("CoreAudio");
+    }
+
+    fn createUniversalBinary(self: *XCFrameworkBuilder, lib_aarch64: *std.Build.Step.Compile, lib_x86_64: *std.Build.Step.Compile) *LipoStep {
+        return LipoStep.create(self.b, .{
+            .name = self.b.fmt("{s}-universal", .{self.name}),
+            .out_name = self.b.fmt("lib{s}.a", .{self.name}),
+            .inputs = &[_]std.Build.LazyPath{
+                lib_aarch64.getEmittedBin(),
+                lib_x86_64.getEmittedBin(),
+            },
+        });
+    }
+
+    fn createLibtoolBundle(self: *XCFrameworkBuilder, universal_lib: *LipoStep) *LibtoolStep {
+        const libtool = LibtoolStep.create(self.b, .{
+            .name = self.name,
+            .out_name = self.b.fmt("{s}-bundle.a", .{self.name}),
+            .sources = &[_]std.Build.LazyPath{
+                universal_lib.output,
+                self.deps.opusenc.artifact("opusenc").getEmittedBin(),
+                self.deps.opusfile.artifact("opusfile").getEmittedBin(),
+                self.deps.opus.artifact("opus").getEmittedBin(),
+            },
+        });
+
+        libtool.step.dependOn(universal_lib.step);
+
+        return libtool;
+    }
+
+    fn createXCFramework(self: *XCFrameworkBuilder, libtool: *LibtoolStep) *XCFrameworkStep {
+        const xcframework = XCFrameworkStep.create(self.b, .{
+            .name = self.name,
+            .out_path = self.b.fmt("build/{s}.xcframework", .{self.name}),
+            .library = libtool.output,
+            .headers = self.b.path("include"),
+        });
+        xcframework.step.dependOn(libtool.step);
+
+        return xcframework;
+    }
+};
+
 pub const XCFrameworkStep = struct {
     step: *Step,
 

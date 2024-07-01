@@ -9,7 +9,8 @@ pub fn build(b: *std.Build) void {
     const lib = createStaticLib(b, null, optimize, deps);
     b.installArtifact(lib);
 
-    const xcframework = setupFrameworkBuildStep(b, optimize, deps);
+    const xcframework_builder = XCFrameworkStep.XCFrameworkBuilder.init(b, "SwashKit", optimize, deps);
+    const xcframework = xcframework_builder.build();
     b.step("xcframework", "Create XCFramework").dependOn(xcframework.step);
 
     const exe = b.addExecutable(.{
@@ -21,37 +22,6 @@ pub fn build(b: *std.Build) void {
 
     configureExe(b, exe, deps);
     b.installArtifact(exe);
-}
-
-fn setupFrameworkBuildStep(
-    b: *std.Build,
-    optimize: std.builtin.OptimizeMode,
-    deps: anytype,
-) *XCFrameworkStep.XCFrameworkStep {
-    const mac_libs = createMacLibs(b, optimize, deps);
-    const universal_lib = createUniversalBinary(b, mac_libs.aarch64, mac_libs.x86_64);
-    const libtool = createLibtoolBundle(b, universal_lib, deps);
-    return createXCFramework(b, libtool);
-}
-
-fn createMacLibs(
-    b: *std.Build,
-    optimize: std.builtin.OptimizeMode,
-    deps: anytype,
-) struct { aarch64: *std.Build.Step.Compile, x86_64: *std.Build.Step.Compile } {
-    const lib_aarch64 = createStaticLib(
-        b,
-        .{ .cpu_arch = .aarch64, .os_tag = .macos },
-        optimize,
-        deps,
-    );
-    const lib_x86_64 = createStaticLib(
-        b,
-        .{ .cpu_arch = .x86_64, .os_tag = .macos },
-        optimize,
-        deps,
-    );
-    return .{ .aarch64 = lib_aarch64, .x86_64 = lib_x86_64 };
 }
 
 fn getDependencies(b: *std.Build, target: std.Build.ResolvedTarget) struct {
@@ -85,21 +55,6 @@ fn createStaticLib(
     return lib;
 }
 
-fn createUniversalBinary(
-    b: *std.Build,
-    lib_aarch64: *std.Build.Step.Compile,
-    lib_x86_64: *std.Build.Step.Compile,
-) *XCFrameworkStep.LipoStep {
-    return XCFrameworkStep.LipoStep.create(b, .{
-        .name = "swash-universal",
-        .out_name = "libswash.a",
-        .inputs = &[_]std.Build.LazyPath{
-            lib_aarch64.getEmittedBin(),
-            lib_x86_64.getEmittedBin(),
-        },
-    });
-}
-
 fn configureLib(b: *std.Build, lib: *std.Build.Step.Compile, deps: anytype) void {
     lib.bundle_compiler_rt = true;
     lib.linkLibC();
@@ -119,35 +74,6 @@ fn configureMacFrameworks(lib: *std.Build.Step.Compile, deps: anytype) void {
     lib.addSystemFrameworkPath(deps.macsdk.path("Frameworks"));
     lib.addLibraryPath(deps.macsdk.path("lib"));
     lib.linkFramework("CoreAudio");
-}
-
-fn createLibtoolBundle(b: *std.Build, universal_lib: *XCFrameworkStep.LipoStep, deps: anytype) *XCFrameworkStep.LibtoolStep {
-    const libtool = XCFrameworkStep.LibtoolStep.create(b, .{
-        .name = "swash",
-        .out_name = "swash-bundle.a",
-        .sources = &[_]std.Build.LazyPath{
-            universal_lib.output,
-            deps.opusenc.artifact("opusenc").getEmittedBin(),
-            deps.opusfile.artifact("opusfile").getEmittedBin(),
-            deps.opus.artifact("opus").getEmittedBin(),
-        },
-    });
-
-    libtool.step.dependOn(universal_lib.step);
-
-    return libtool;
-}
-
-fn createXCFramework(b: *std.Build, libtool: *XCFrameworkStep.LibtoolStep) *XCFrameworkStep.XCFrameworkStep {
-    const xcframework = XCFrameworkStep.XCFrameworkStep.create(b, .{
-        .name = "SwashKit",
-        .out_path = "build/SwashKit.xcframework",
-        .library = libtool.output,
-        .headers = b.path("include"),
-    });
-    xcframework.step.dependOn(libtool.step);
-
-    return xcframework;
 }
 
 fn configureExe(b: *std.Build, exe: *std.Build.Step.Compile, deps: anytype) void {
