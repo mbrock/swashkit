@@ -16,11 +16,7 @@ pub const Signal = enum(c_int) {
     Music = c.OPUS_SIGNAL_MUSIC,
 };
 
-// pub const Callbacks = c.OpusEncCallbacks;
-
 enc: ?*c.OggOpusEnc = null,
-
-//callbacks: c.OpusEncCallbacks,
 
 pub fn init(
     self: *Self,
@@ -37,12 +33,6 @@ pub fn init(
         family,
         &err,
     );
-
-    // if (c.ope_encoder_ctl(self.enc, c.OPE_SET_PACKET_CALLBACK_REQUEST, fun, arg) != c.OPE_OK) {
-    //     return error.SetPacketCallbackFailed;
-    // }
-
-    // self.callbacks.write = null;
 
     if (self.enc == null) {
         return error.EncoderCreationFailed;

@@ -97,7 +97,7 @@ pub fn play(ctx: *Ctx, idx: usize) !void {
     ctx.cfg.?.capture.pDeviceID = &selected_device.id;
     ctx.cfg.?.pUserData = ctx;
     ctx.cfg.?.sampleRate = 48000;
-    ctx.cfg.?.periodSizeInMilliseconds = 20;
+    ctx.cfg.?.periodSizeInMilliseconds = 100;
     ctx.cfg.?.capture.format = c.ma_format_f32;
     ctx.cfg.?.capture.channels = 2;
     ctx.cfg.?.dataCallback = onAudioData;
@@ -144,40 +144,6 @@ fn onAudioData(
 
     ctx.buf = page;
     if (ctx.fun) |fun| fun(ctx);
-}
-
-fn handleOggPage(
-    ptr: ?*anyopaque,
-    data: [*c]const u8,
-    frame_count: c_int,
-) callconv(.C) c_int {
-    _ = frame_count; // autofix
-    _ = data; // autofix
-    _ = ptr; // autofix
-
-    return 0;
-}
-
-fn handleOpusPacket(
-    ptr: ?*anyopaque,
-    data: [*c]const u8,
-    frame_count: c_int,
-    flags: c_int,
-) callconv(.C) c_int {
-    _ = flags; // autofix
-    _ = frame_count; // autofix
-    _ = data; // autofix
-    _ = ptr; // autofix
-    // _ = flags; // autofix
-    // const ctx = @as(*Ctx, @ptrCast(@alignCast(ptr)));
-    // ctx.buf = data[0..@intCast(frame_count)];
-    // if (ctx.fun) |callback| callback(ctx);
-    return 0;
-}
-
-fn handleOpusClose(ptr: ?*anyopaque) callconv(.C) c_int {
-    _ = ptr;
-    return 0;
 }
 
 // C API

@@ -9,14 +9,14 @@ pub fn build(b: *std.Build) !void {
     const lib = createStaticLib(b, null, optimize, deps);
     b.installArtifact(lib);
 
-    const xcframework = try XCFrameworkStep.create(b, .{
+    const xcframework = XCFrameworkStep.create(b, .{
         .name = "SwashKit",
         .optimize = optimize,
         .root_source_file = "src/mic.zig",
         .configure_lib = configureXCFrameworkLib,
     });
 
-    b.step("xcframework", "Create XCFramework").dependOn(xcframework.step);
+    b.default_step.dependOn(xcframework.step);
 
     const exe = b.addExecutable(.{
         .name = "swash",
@@ -27,8 +27,6 @@ pub fn build(b: *std.Build) !void {
 
     configureExe(b, exe, deps);
     b.installArtifact(exe);
-
-    b.default_step.dependOn(xcframework.step);
 }
 
 fn configureXCFrameworkLib(lib: *std.Build.Step.Compile, target: std.Build.ResolvedTarget) void {
