@@ -30,17 +30,21 @@ pub const XCFrameworkBuilder = struct {
 
     pub fn build(self: *XCFrameworkBuilder) *XCFrameworkStep {
         const mac_libs = self.createMacLibs();
-        const universal_lib = self.createUniversalBinary(mac_libs.aarch64, mac_libs.x86_64);
+        const universal_lib = self.createUniversalBinary(mac_libs);
         const libtool = self.createLibtoolBundle(universal_lib, mac_libs);
         return self.createXCFramework(libtool);
     }
 
-    const MacLibs = struct { aarch64: *std.Build.Step.Compile, x86_64: *std.Build.Step.Compile };
-
-    fn createMacLibs(self: *XCFrameworkBuilder) MacLibs {
-        const lib_aarch64 = self.createStaticLib(.{ .cpu_arch = .aarch64, .os_tag = .macos });
-        const lib_x86_64 = self.createStaticLib(.{ .cpu_arch = .x86_64, .os_tag = .macos });
-        return .{ .aarch64 = lib_aarch64, .x86_64 = lib_x86_64 };
+    fn createMacLibs(self: *XCFrameworkBuilder) []const *std.Build.Step.Compile {
+        const targets = [_]std.zig.CrossTarget{
+            .{ .cpu_arch = .aarch64, .os_tag = .macos },
+            .{ .cpu_arch = .x86_64, .os_tag = .macos },
+        };
+        var libs = self.b.allocator.alloc(*std.Build.Step.Compile, targets.len) catch @panic("OOM");
+        for (targets, 0..) |target, i| {
+            libs[i] = self.createStaticLib(target);
+        }
+        return libs;
     }
 
     fn createStaticLib(self: *XCFrameworkBuilder, target_query: std.zig.CrossTarget) *std.Build.Step.Compile {
@@ -59,34 +63,31 @@ pub const XCFrameworkBuilder = struct {
         return lib;
     }
 
-    fn createUniversalBinary(self: *XCFrameworkBuilder, lib_aarch64: *std.Build.Step.Compile, lib_x86_64: *std.Build.Step.Compile) *LipoStep {
+    fn createUniversalBinary(self: *XCFrameworkBuilder, mac_libs: []const *std.Build.Step.Compile) *LipoStep {
+        var inputs = self.b.allocator.alloc(std.Build.LazyPath, mac_libs.len) catch @panic("OOM");
+        for (mac_libs, 0..) |lib, i| {
+            inputs[i] = lib.getEmittedBin();
+        }
+
         return LipoStep.create(self.b, .{
             .name = self.b.fmt("{s}-universal", .{self.name}),
             .out_name = self.b.fmt("lib{s}.a", .{self.name}),
-            .inputs = &[_]std.Build.LazyPath{
-                lib_aarch64.getEmittedBin(),
-                lib_x86_64.getEmittedBin(),
-            },
+            .inputs = inputs,
         });
     }
 
-    fn createLibtoolBundle(self: *XCFrameworkBuilder, universal_lib: *LipoStep, mac_libs: MacLibs) *LibtoolStep {
+    fn createLibtoolBundle(self: *XCFrameworkBuilder, universal_lib: *LipoStep, mac_libs: []const *std.Build.Step.Compile) *LibtoolStep {
         var sources = std.ArrayList(std.Build.LazyPath).init(self.b.allocator);
         sources.append(universal_lib.output) catch unreachable;
 
-        for (mac_libs.aarch64.root_module.link_objects.items) |item| switch (item) {
-            .other_step => |step| {
-                sources.append(step.getEmittedBin()) catch unreachable;
-            },
-            else => {},
-        };
-
-        for (mac_libs.x86_64.root_module.link_objects.items) |item| switch (item) {
-            .other_step => |step| {
-                sources.append(step.getEmittedBin()) catch unreachable;
-            },
-            else => {},
-        };
+        for (mac_libs) |lib| {
+            for (lib.root_module.link_objects.items) |item| switch (item) {
+                .other_step => |step| {
+                    sources.append(step.getEmittedBin()) catch unreachable;
+                },
+                else => {},
+            };
+        }
 
         const libtool = LibtoolStep.create(self.b, .{
             .name = self.name,
