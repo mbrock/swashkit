@@ -4,8 +4,9 @@ const std = @import("std");
 const Step = std.Build.Step;
 const RunStep = std.Build.Step.Run;
 const LazyPath = std.Build.LazyPath;
+const Compile = std.Build.Step.Compile;
 
-pub const ConfigureLibFn = *const fn (*std.Build.Step.Compile, std.Build.ResolvedTarget) void;
+pub const ConfigureLibFn = *const fn (*Compile, std.Build.ResolvedTarget) void;
 
 pub fn create(b: *std.Build, options: XCFrameworkOptions) !*XCFrameworkStep {
     var builder = try b.allocator.create(@This());
@@ -43,19 +44,19 @@ pub fn build(self: *@This()) !*XCFrameworkStep {
     return self.createXCFramework(libtool);
 }
 
-fn createLibsForPlatforms(self: *@This()) ![]const *std.Build.Step.Compile {
+fn createLibsForPlatforms(self: *@This()) ![]const *Compile {
     const targets = [_]std.zig.CrossTarget{
         .{ .cpu_arch = .aarch64, .os_tag = .macos },
         .{ .cpu_arch = .x86_64, .os_tag = .macos },
     };
-    var libs = try self.b.allocator.alloc(*std.Build.Step.Compile, targets.len);
+    var libs = try self.b.allocator.alloc(*Compile, targets.len);
     for (targets, 0..) |target, i| {
         libs[i] = self.createStaticLib(target);
     }
     return libs;
 }
 
-fn createStaticLib(self: *@This(), target_query: std.zig.CrossTarget) *std.Build.Step.Compile {
+fn createStaticLib(self: *@This(), target_query: std.zig.CrossTarget) *Compile {
     const target = self.b.resolveTargetQuery(target_query);
     const lib = self.b.addStaticLibrary(.{
         .name = self.b.fmt("{s}-{s}", .{ self.name, target.result.osArchName() }),
@@ -71,7 +72,7 @@ fn createStaticLib(self: *@This(), target_query: std.zig.CrossTarget) *std.Build
     return lib;
 }
 
-fn createUniversalBinary(self: *@This(), libs: []const *std.Build.Step.Compile) !*LipoStep {
+fn createUniversalBinary(self: *@This(), libs: []const *Compile) !*LipoStep {
     var inputs = try self.b.allocator.alloc(std.Build.LazyPath, libs.len);
     for (libs, 0..) |lib, i| {
         inputs[i] = lib.getEmittedBin();
@@ -84,7 +85,7 @@ fn createUniversalBinary(self: *@This(), libs: []const *std.Build.Step.Compile) 
     });
 }
 
-fn createLibtoolBundle(self: *@This(), universal_lib: *LipoStep, libs: []const *std.Build.Step.Compile) !*LibtoolStep {
+fn createLibtoolBundle(self: *@This(), universal_lib: *LipoStep, libs: []const *Compile) !*LibtoolStep {
     var sources = std.ArrayList(std.Build.LazyPath).init(self.b.allocator);
     try sources.append(universal_lib.output);
 
