@@ -11,7 +11,6 @@ pub const XCFrameworkBuilder = struct {
     optimize: std.builtin.OptimizeMode,
     root_source_file: []const u8,
     configure_lib: *const fn (*std.Build.Step.Compile, *XCFrameworkBuilder, std.Build.ResolvedTarget) void,
-    libtool_sources: []const []const u8,
 
     pub fn init(
         b: *std.Build,
@@ -19,7 +18,6 @@ pub const XCFrameworkBuilder = struct {
         optimize: std.builtin.OptimizeMode,
         root_source_file: []const u8,
         configure_lib: fn (*std.Build.Step.Compile, *XCFrameworkBuilder, std.Build.ResolvedTarget) void,
-        libtool_sources: []const []const u8,
     ) XCFrameworkBuilder {
         return .{
             .b = b,
@@ -27,18 +25,19 @@ pub const XCFrameworkBuilder = struct {
             .optimize = optimize,
             .root_source_file = root_source_file,
             .configure_lib = configure_lib,
-            .libtool_sources = libtool_sources,
         };
     }
 
     pub fn build(self: *XCFrameworkBuilder) *XCFrameworkStep {
         const mac_libs = self.createMacLibs();
         const universal_lib = self.createUniversalBinary(mac_libs.aarch64, mac_libs.x86_64);
-        const libtool = self.createLibtoolBundle(universal_lib);
+        const libtool = self.createLibtoolBundle(universal_lib, mac_libs);
         return self.createXCFramework(libtool);
     }
 
-    fn createMacLibs(self: *XCFrameworkBuilder) struct { aarch64: *std.Build.Step.Compile, x86_64: *std.Build.Step.Compile } {
+    const MacLibs = struct { aarch64: *std.Build.Step.Compile, x86_64: *std.Build.Step.Compile };
+
+    fn createMacLibs(self: *XCFrameworkBuilder) MacLibs {
         const lib_aarch64 = self.createStaticLib(.{ .cpu_arch = .aarch64, .os_tag = .macos });
         const lib_x86_64 = self.createStaticLib(.{ .cpu_arch = .x86_64, .os_tag = .macos });
         return .{ .aarch64 = lib_aarch64, .x86_64 = lib_x86_64 };
@@ -71,12 +70,23 @@ pub const XCFrameworkBuilder = struct {
         });
     }
 
-    fn createLibtoolBundle(self: *XCFrameworkBuilder, universal_lib: *LipoStep) *LibtoolStep {
+    fn createLibtoolBundle(self: *XCFrameworkBuilder, universal_lib: *LipoStep, mac_libs: MacLibs) *LibtoolStep {
         var sources = std.ArrayList(std.Build.LazyPath).init(self.b.allocator);
         sources.append(universal_lib.output) catch unreachable;
-        for (self.libtool_sources) |source| {
-            sources.append(self.b.path(source)) catch unreachable;
-        }
+
+        for (mac_libs.aarch64.root_module.link_objects.items) |item| switch (item) {
+            .other_step => |step| {
+                sources.append(step.getEmittedBin()) catch unreachable;
+            },
+            else => {},
+        };
+
+        for (mac_libs.x86_64.root_module.link_objects.items) |item| switch (item) {
+            .other_step => |step| {
+                sources.append(step.getEmittedBin()) catch unreachable;
+            },
+            else => {},
+        };
 
         const libtool = LibtoolStep.create(self.b, .{
             .name = self.name,

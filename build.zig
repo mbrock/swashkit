@@ -15,11 +15,6 @@ pub fn build(b: *std.Build) void {
         optimize,
         "src/mic.zig",
         configureXCFrameworkLib,
-        &[_][]const u8{
-            b.fmt("{s}", .{deps.opusenc.artifact("opusenc").getEmittedBin().getPath(b)}),
-            b.fmt("{s}", .{deps.opusfile.artifact("opusfile").getEmittedBin().getPath(b)}),
-            b.fmt("{s}", .{deps.opus.artifact("opus").getEmittedBin().getPath(b)}),
-        },
     );
 
     const xcframework = xcframework_builder.build();
@@ -41,6 +36,10 @@ fn configureXCFrameworkLib(lib: *std.Build.Step.Compile, builder: *XCFrameworkSt
     lib.addIncludePath(builder.b.path("src"));
 
     const deps = getDependencies(builder.b, target);
+
+    lib.linkLibrary(deps.opusenc.artifact("opusenc"));
+    lib.linkLibrary(deps.opusfile.artifact("opusfile"));
+    lib.linkLibrary(deps.opus.artifact("opus"));
 
     if (target.result.isDarwin()) {
         lib.addSystemIncludePath(deps.macsdk.path("include"));
