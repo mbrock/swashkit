@@ -9,11 +9,19 @@ pub const c = @cImport({
 pub const Application = enum(c_int) {
     VoIP = c.OPUS_APPLICATION_VOIP,
     Audio = c.OPUS_APPLICATION_AUDIO,
+    Request = c.OPUS_SET_APPLICATION_REQUEST,
 };
 
 pub const Signal = enum(c_int) {
     Voice = c.OPUS_SIGNAL_VOICE,
     Music = c.OPUS_SIGNAL_MUSIC,
+    Request = c.OPUS_SET_SIGNAL_REQUEST,
+};
+
+pub const EncoderParam = enum(c_int) {
+    Bitrate = c.OPUS_SET_BITRATE_REQUEST,
+    MuxingDelay = c.OPE_SET_MUXING_DELAY_REQUEST,
+    DecisionDelay = c.OPE_SET_DECISION_DELAY_REQUEST,
 };
 
 enc: ?*c.OggOpusEnc = null,
@@ -67,41 +75,16 @@ pub fn stop(self: *Self) !void {
     }
 }
 
-pub fn setApplication(self: *Self, application: Application) !void {
-    if (c.ope_encoder_ctl(
-        self.enc,
-        c.OPUS_SET_APPLICATION_REQUEST,
-        @intFromEnum(application),
-    ) != c.OPE_OK) {
-        return error.SetApplicationFailed;
-    }
-}
+pub fn setEncoderParam(self: *Self, comptime T: type, param: T, value: c_int) !void {
+    const result = switch (T) {
+        Application => c.ope_encoder_ctl(self.enc, @intFromEnum(Application.Request), value),
+        Signal => c.ope_encoder_ctl(self.enc, @intFromEnum(Signal.Request), value),
+        EncoderParam => c.ope_encoder_ctl(self.enc, @intFromEnum(param), value),
+        else => @compileError("Unsupported parameter type"),
+    };
 
-pub fn setSignal(self: *Self, signal: Signal) !void {
-    if (c.ope_encoder_ctl(
-        self.enc,
-        c.OPUS_SET_SIGNAL_REQUEST,
-        @intFromEnum(signal),
-    ) != c.OPE_OK) {
-        return error.SetSignalFailed;
-    }
-}
-
-pub fn setBitrate(self: *Self, bitrate: c_int) !void {
-    if (c.ope_encoder_ctl(self.enc, c.OPUS_SET_BITRATE_REQUEST, bitrate) != c.OPE_OK) {
-        return error.SetBitrateFailed;
-    }
-}
-
-pub fn setMuxingDelay(self: *Self, delay: c_int) !void {
-    if (c.ope_encoder_ctl(self.enc, c.OPE_SET_MUXING_DELAY_REQUEST, delay) != c.OPE_OK) {
-        return error.SetMuxingDelayFailed;
-    }
-}
-
-pub fn setDecisionDelay(self: *Self, delay: c_int) !void {
-    if (c.ope_encoder_ctl(self.enc, c.OPE_SET_DECISION_DELAY_REQUEST, delay) != c.OPE_OK) {
-        return error.SetDecisionDelayFailed;
+    if (result != c.OPE_OK) {
+        return error.SetEncoderParamFailed;
     }
 }
 
