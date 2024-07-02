@@ -41,18 +41,13 @@ pub fn create(
     };
 
     try ctx.enc.init(48000, 2, 0);
-    try ctx.enc.setApplication(Opus.Application.VoIP);
-    try ctx.enc.setSignal(Opus.Signal.Voice);
-    try ctx.enc.setBitrate(32000);
-    try ctx.enc.setMuxingDelay(0);
-    try ctx.enc.setDecisionDelay(0);
+    try ctx.enc.setEncoderParam(.Application, @intFromEnum(Opus.Application.VoIP));
+    try ctx.enc.setEncoderParam(.Signal, @intFromEnum(Opus.Signal.Voice));
+    try ctx.enc.setEncoderParam(.Bitrate, 32000);
+    try ctx.enc.setEncoderParam(.MuxingDelay, 0);
+    try ctx.enc.setEncoderParam(.DecisionDelay, 0);
 
-    if (c.ma_context_init(
-        null,
-        0,
-        null,
-        ctx.snd,
-    ) != c.MA_SUCCESS) {
+    if (c.ma_context_init(null, 0, null, ctx.snd) != c.MA_SUCCESS) {
         return error.MiniaudioInitializationFailed;
     }
 
@@ -72,7 +67,7 @@ pub fn free(self: *Ctx) void {
 }
 
 pub fn scan(self: *Ctx) !c_uint {
-    var device_ptr: [*c]c.ma_device_info = undefined;
+    var device_ptr: [*]c.ma_device_info = undefined;
     var device_count: c_uint = 0;
 
     if (c.ma_context_get_devices(
@@ -80,12 +75,12 @@ pub fn scan(self: *Ctx) !c_uint {
         null,
         null,
         @ptrCast(&device_ptr),
-        @ptrCast(&device_count),
+        &device_count,
     ) != c.MA_SUCCESS) {
         return error.DeviceEnumerationFailed;
     }
 
-    self.dev = @as([*]c.ma_device_info, @ptrCast(device_ptr))[0..device_count];
+    self.dev = device_ptr[0..device_count];
 
     return device_count;
 }

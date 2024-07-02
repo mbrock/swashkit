@@ -6,7 +6,7 @@ const RunStep = std.Build.Step.Run;
 const LazyPath = std.Build.LazyPath;
 const Compile = std.Build.Step.Compile;
 
-pub const ConfigureLibFn = *const fn (*Compile, std.Build.ResolvedTarget) void;
+pub const ConfigureLibFn = *const fn (*Compile) void;
 
 b: *std.Build,
 name: []const u8,
@@ -68,7 +68,7 @@ fn createStaticLib(self: *@This(), target_query: std.zig.CrossTarget) *Compile {
     lib.bundle_compiler_rt = true;
     lib.linkLibC();
 
-    self.configure_lib(lib, target);
+    self.configure_lib(lib);
     return lib;
 }
 
