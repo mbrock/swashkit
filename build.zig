@@ -29,13 +29,17 @@ pub fn build(b: *std.Build) void {
 
     configureExe(b, exe, deps);
     b.installArtifact(exe);
+
+    b.default_step.dependOn(xcframework.step);
 }
 
-fn configureXCFrameworkLib(lib: *std.Build.Step.Compile, builder: *XCFrameworkStep.XCFrameworkBuilder, target: std.Build.ResolvedTarget) void {
-    lib.addCSourceFile(.{ .file = builder.b.path("src/miniaudio.c") });
-    lib.addIncludePath(builder.b.path("src"));
+fn configureXCFrameworkLib(lib: *std.Build.Step.Compile, target: std.Build.ResolvedTarget) void {
+    const b = lib.step.owner;
 
-    const deps = getDependencies(builder.b, target);
+    lib.addCSourceFile(.{ .file = b.path("src/miniaudio.c") });
+    lib.addIncludePath(b.path("src"));
+
+    const deps = getDependencies(b, target);
 
     lib.linkLibrary(deps.opusenc.artifact("opusenc"));
     lib.linkLibrary(deps.opusfile.artifact("opusfile"));

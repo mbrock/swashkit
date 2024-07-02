@@ -5,7 +5,7 @@ const Step = std.Build.Step;
 const RunStep = std.Build.Step.Run;
 const LazyPath = std.Build.LazyPath;
 
-pub const ConfigureLibFn = *const fn (*XCFrameworkBuilder, *std.Build.Step.Compile, std.Build.ResolvedTarget) void;
+pub const ConfigureLibFn = *const fn (*std.Build.Step.Compile, std.Build.ResolvedTarget) void;
 
 pub const XCFrameworkBuilder = struct {
     b: *std.Build,
@@ -61,7 +61,7 @@ pub const XCFrameworkBuilder = struct {
         lib.bundle_compiler_rt = true;
         lib.linkLibC();
 
-        self.configure_lib(self, lib, target);
+        self.configure_lib(lib, target);
         return lib;
     }
 
