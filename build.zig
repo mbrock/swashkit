@@ -9,8 +9,7 @@ pub fn build(b: *std.Build) void {
     const lib = createStaticLib(b, null, optimize, deps);
     b.installArtifact(lib);
 
-    var xcframework_builder = XCFrameworkStep.XCFrameworkBuilder.init(.{
-        .b = b,
+    var xcframework_builder = XCFrameworkStep.XCFrameworkBuilder.init(b, .{
         .name = "SwashKit",
         .optimize = optimize,
         .root_source_file = "src/mic.zig",

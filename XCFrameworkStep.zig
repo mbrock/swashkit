@@ -15,16 +15,15 @@ pub const XCFrameworkBuilder = struct {
     configure_lib: ConfigureLibFn,
 
     pub const Options = struct {
-        b: *std.Build,
         name: []const u8,
         optimize: std.builtin.OptimizeMode,
         root_source_file: []const u8,
         configure_lib: ConfigureLibFn,
     };
 
-    pub fn init(options: Options) XCFrameworkBuilder {
+    pub fn init(b: *std.Build, options: Options) XCFrameworkBuilder {
         return .{
-            .b = options.b,
+            .b = b,
             .name = options.name,
             .optimize = options.optimize,
             .root_source_file = options.root_source_file,
