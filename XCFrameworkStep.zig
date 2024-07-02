@@ -14,10 +14,10 @@ optimize: std.builtin.OptimizeMode,
 root_source_file: []const u8,
 configure_lib: ConfigureLibFn,
 
-pub fn create(b: *std.Build, options: XCFrameworkOptions) !*XCFrameworkStep {
-    var step = try b.allocator.create(@This());
+pub fn create(b: *std.Build, options: XCFrameworkOptions) *XCFrameworkStep {
+    var step = b.allocator.create(@This()) catch @panic("OOM");
     step.* = @This().init(b, options);
-    return try step.setup();
+    return step.setup();
 }
 
 pub const XCFrameworkOptions = struct {
@@ -37,19 +37,19 @@ pub fn init(b: *std.Build, options: XCFrameworkOptions) @This() {
     };
 }
 
-pub fn setup(self: *@This()) !*XCFrameworkStep {
-    const libs = try self.createLibsForPlatforms();
-    const universal_lib = try self.createUniversalBinary(libs);
-    const libtool = try self.createLibtoolBundle(universal_lib, libs);
+pub fn setup(self: *@This()) *XCFrameworkStep {
+    const libs = self.createLibsForPlatforms();
+    const universal_lib = self.createUniversalBinary(libs);
+    const libtool = self.createLibtoolBundle(universal_lib, libs);
     return self.createXCFramework(libtool);
 }
 
-fn createLibsForPlatforms(self: *@This()) ![]const *Compile {
+fn createLibsForPlatforms(self: *@This()) []const *Compile {
     const targets = [_]std.zig.CrossTarget{
         .{ .cpu_arch = .aarch64, .os_tag = .macos },
         .{ .cpu_arch = .x86_64, .os_tag = .macos },
     };
-    var libs = try self.b.allocator.alloc(*Compile, targets.len);
+    var libs = self.b.allocator.alloc(*Compile, targets.len) catch @panic("OOM");
     for (targets, 0..) |target, i| {
         libs[i] = self.createStaticLib(target);
     }
@@ -72,8 +72,8 @@ fn createStaticLib(self: *@This(), target_query: std.zig.CrossTarget) *Compile {
     return lib;
 }
 
-fn createUniversalBinary(self: *@This(), libs: []const *Compile) !*LipoStep {
-    var inputs = try self.b.allocator.alloc(LazyPath, libs.len);
+fn createUniversalBinary(self: *@This(), libs: []const *Compile) *LipoStep {
+    var inputs = self.b.allocator.alloc(LazyPath, libs.len) catch @panic("OOM");
     for (libs, 0..) |lib, i| {
         inputs[i] = lib.getEmittedBin();
     }
@@ -85,14 +85,14 @@ fn createUniversalBinary(self: *@This(), libs: []const *Compile) !*LipoStep {
     });
 }
 
-fn createLibtoolBundle(self: *@This(), universal_lib: *LipoStep, libs: []const *Compile) !*LibtoolStep {
+fn createLibtoolBundle(self: *@This(), universal_lib: *LipoStep, libs: []const *Compile) *LibtoolStep {
     var sources = std.ArrayList(LazyPath).init(self.b.allocator);
-    try sources.append(universal_lib.output);
+    sources.append(universal_lib.output) catch @panic("OOM");
 
     for (libs) |lib| {
         for (lib.root_module.link_objects.items) |item| switch (item) {
             .other_step => |step| {
-                try sources.append(step.getEmittedBin());
+                sources.append(step.getEmittedBin()) catch @panic("OOM");
             },
             else => {},
         };
