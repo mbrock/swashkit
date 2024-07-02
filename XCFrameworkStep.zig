@@ -38,13 +38,13 @@ pub const XCFrameworkBuilder = struct {
     }
 
     pub fn build(self: *XCFrameworkBuilder) !*XCFrameworkStep {
-        const mac_libs = try self.createMacLibs();
-        const universal_lib = try self.createUniversalBinary(mac_libs);
-        const libtool = try self.createLibtoolBundle(universal_lib, mac_libs);
+        const libs = try self.createLibsForPlatforms();
+        const universal_lib = try self.createUniversalBinary(libs);
+        const libtool = try self.createLibtoolBundle(universal_lib, libs);
         return self.createXCFramework(libtool);
     }
 
-    fn createMacLibs(self: *XCFrameworkBuilder) ![]const *std.Build.Step.Compile {
+    fn createLibsForPlatforms(self: *XCFrameworkBuilder) ![]const *std.Build.Step.Compile {
         const targets = [_]std.zig.CrossTarget{
             .{ .cpu_arch = .aarch64, .os_tag = .macos },
             .{ .cpu_arch = .x86_64, .os_tag = .macos },
@@ -72,9 +72,9 @@ pub const XCFrameworkBuilder = struct {
         return lib;
     }
 
-    fn createUniversalBinary(self: *XCFrameworkBuilder, mac_libs: []const *std.Build.Step.Compile) !*LipoStep {
-        var inputs = try self.b.allocator.alloc(std.Build.LazyPath, mac_libs.len);
-        for (mac_libs, 0..) |lib, i| {
+    fn createUniversalBinary(self: *XCFrameworkBuilder, libs: []const *std.Build.Step.Compile) !*LipoStep {
+        var inputs = try self.b.allocator.alloc(std.Build.LazyPath, libs.len);
+        for (libs, 0..) |lib, i| {
             inputs[i] = lib.getEmittedBin();
         }
 
@@ -85,11 +85,11 @@ pub const XCFrameworkBuilder = struct {
         });
     }
 
-    fn createLibtoolBundle(self: *XCFrameworkBuilder, universal_lib: *LipoStep, mac_libs: []const *std.Build.Step.Compile) !*LibtoolStep {
+    fn createLibtoolBundle(self: *XCFrameworkBuilder, universal_lib: *LipoStep, libs: []const *std.Build.Step.Compile) !*LibtoolStep {
         var sources = std.ArrayList(std.Build.LazyPath).init(self.b.allocator);
         try sources.append(universal_lib.output);
 
-        for (mac_libs) |lib| {
+        for (libs) |lib| {
             for (lib.root_module.link_objects.items) |item| switch (item) {
                 .other_step => |step| {
                     try sources.append(step.getEmittedBin());
