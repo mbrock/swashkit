@@ -7,6 +7,12 @@ const LazyPath = std.Build.LazyPath;
 
 pub const ConfigureLibFn = *const fn (*std.Build.Step.Compile, std.Build.ResolvedTarget) void;
 
+pub fn addXCFramework(b: *std.Build, options: XCFrameworkBuilder.Options) !*XCFrameworkStep {
+    var builder = try b.allocator.create(XCFrameworkBuilder);
+    builder.* = XCFrameworkBuilder.init(b, options);
+    return try builder.build();
+}
+
 pub const XCFrameworkBuilder = struct {
     b: *std.Build,
     name: []const u8,

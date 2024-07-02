@@ -1,7 +1,7 @@
 const std = @import("std");
 const XCFrameworkStep = @import("./XCFrameworkStep.zig");
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -9,14 +9,13 @@ pub fn build(b: *std.Build) void {
     const lib = createStaticLib(b, null, optimize, deps);
     b.installArtifact(lib);
 
-    var xcframework_builder = XCFrameworkStep.XCFrameworkBuilder.init(b, .{
+    const xcframework = try XCFrameworkStep.addXCFramework(b, .{
         .name = "SwashKit",
         .optimize = optimize,
         .root_source_file = "src/mic.zig",
         .configure_lib = configureXCFrameworkLib,
     });
 
-    const xcframework = xcframework_builder.build();
     b.step("xcframework", "Create XCFramework").dependOn(xcframework.step);
 
     const exe = b.addExecutable(.{
