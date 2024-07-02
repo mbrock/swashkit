@@ -5,7 +5,6 @@ const Step = std.Build.Step;
 const RunStep = std.Build.Step.Run;
 const LazyPath = std.Build.LazyPath;
 const Compile = std.Build.Step.Compile;
-const Path = LazyPath;
 
 pub const ConfigureLibFn = *const fn (*Compile, std.Build.ResolvedTarget) void;
 
@@ -74,7 +73,7 @@ fn createStaticLib(self: *@This(), target_query: std.zig.CrossTarget) *Compile {
 }
 
 fn createUniversalBinary(self: *@This(), libs: []const *Compile) !*LipoStep {
-    var inputs = try self.b.allocator.alloc(Path, libs.len);
+    var inputs = try self.b.allocator.alloc(LazyPath, libs.len);
     for (libs, 0..) |lib, i| {
         inputs[i] = lib.getEmittedBin();
     }
@@ -87,7 +86,7 @@ fn createUniversalBinary(self: *@This(), libs: []const *Compile) !*LipoStep {
 }
 
 fn createLibtoolBundle(self: *@This(), universal_lib: *LipoStep, libs: []const *Compile) !*LibtoolStep {
-    var sources = std.ArrayList(Path).init(self.b.allocator);
+    var sources = std.ArrayList(LazyPath).init(self.b.allocator);
     try sources.append(universal_lib.output);
 
     for (libs) |lib| {
@@ -133,10 +132,10 @@ pub const XCFrameworkStep = struct {
         out_path: []const u8,
 
         /// Library file (dylib, a) to package.
-        library: Path,
+        library: LazyPath,
 
         /// Path to a directory with the headers.
-        headers: Path,
+        headers: LazyPath,
     };
 
     pub fn create(b: *std.Build, opts: Options) *XCFrameworkStep {
@@ -186,7 +185,7 @@ pub const LipoStep = struct {
         out_name: []const u8,
 
         /// Library files (dylib, a) to package.
-        inputs: []const Path,
+        inputs: []const LazyPath,
     };
 
     pub fn create(b: *std.Build, opts: Options) *LipoStep {
@@ -221,7 +220,7 @@ pub const LibtoolStep = struct {
         out_name: []const u8,
 
         /// Library files (.a) to combine.
-        sources: []const Path,
+        sources: []const LazyPath,
     };
 
     pub fn create(b: *std.Build, opts: Options) *LibtoolStep {
