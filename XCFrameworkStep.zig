@@ -5,19 +5,21 @@ const Step = std.Build.Step;
 const RunStep = std.Build.Step.Run;
 const LazyPath = std.Build.LazyPath;
 
+pub const ConfigureLibFn = *const fn (*XCFrameworkBuilder, *std.Build.Step.Compile, std.Build.ResolvedTarget) void;
+
 pub const XCFrameworkBuilder = struct {
     b: *std.Build,
     name: []const u8,
     optimize: std.builtin.OptimizeMode,
     root_source_file: []const u8,
-    configure_lib: *const fn (*std.Build.Step.Compile, *XCFrameworkBuilder, std.Build.ResolvedTarget) void,
+    configure_lib: ConfigureLibFn,
 
     pub fn init(
         b: *std.Build,
         name: []const u8,
         optimize: std.builtin.OptimizeMode,
         root_source_file: []const u8,
-        configure_lib: fn (*std.Build.Step.Compile, *XCFrameworkBuilder, std.Build.ResolvedTarget) void,
+        configure_lib: ConfigureLibFn,
     ) XCFrameworkBuilder {
         return .{
             .b = b,
@@ -59,7 +61,7 @@ pub const XCFrameworkBuilder = struct {
         lib.bundle_compiler_rt = true;
         lib.linkLibC();
 
-        self.configure_lib(lib, self, target);
+        self.configure_lib(self, lib, target);
         return lib;
     }
 
