@@ -8,17 +8,17 @@ const Compile = std.Build.Step.Compile;
 
 pub const ConfigureLibFn = *const fn (*Compile, std.Build.ResolvedTarget) void;
 
-pub fn create(b: *std.Build, options: XCFrameworkOptions) !*XCFrameworkStep {
-    var builder = try b.allocator.create(@This());
-    builder.* = @This().init(b, options);
-    return try builder.build();
-}
-
 b: *std.Build,
 name: []const u8,
 optimize: std.builtin.OptimizeMode,
 root_source_file: []const u8,
 configure_lib: ConfigureLibFn,
+
+pub fn create(b: *std.Build, options: XCFrameworkOptions) !*XCFrameworkStep {
+    var step = try b.allocator.create(@This());
+    step.* = @This().init(b, options);
+    return try step.setup();
+}
 
 pub const XCFrameworkOptions = struct {
     name: []const u8,
@@ -37,7 +37,7 @@ pub fn init(b: *std.Build, options: XCFrameworkOptions) @This() {
     };
 }
 
-pub fn build(self: *@This()) !*XCFrameworkStep {
+pub fn setup(self: *@This()) !*XCFrameworkStep {
     const libs = try self.createLibsForPlatforms();
     const universal_lib = try self.createUniversalBinary(libs);
     const libtool = try self.createLibtoolBundle(universal_lib, libs);
