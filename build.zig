@@ -5,17 +5,12 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const lib = createStaticLib(b, null, optimize);
-    b.installArtifact(lib);
-
     const xcframework = XCFrameworkStep.create(b, .{
         .name = "SwashKit",
         .optimize = optimize,
         .root_source_file = "src/mic.zig",
         .configure_lib = configureLib,
     });
-
-    b.default_step.dependOn(xcframework.step);
 
     const exe = b.addExecutable(.{
         .name = "swash",
@@ -25,23 +20,9 @@ pub fn build(b: *std.Build) !void {
     });
 
     configureLib(exe);
-    b.installArtifact(exe);
-}
 
-fn createStaticLib(
-    b: *std.Build,
-    target_query: ?std.zig.CrossTarget,
-    optimize: std.builtin.OptimizeMode,
-) *std.Build.Step.Compile {
-    const target = if (target_query) |tq| b.resolveTargetQuery(tq) else b.host;
-    const lib = b.addStaticLibrary(.{
-        .name = b.fmt("swash-{s}", .{target.result.osArchName()}),
-        .root_source_file = b.path("src/mic.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    configureLib(lib);
-    return lib;
+    b.default_step.dependOn(xcframework.step);
+    b.installArtifact(exe);
 }
 
 fn configureLib(lib: *std.Build.Step.Compile) void {
