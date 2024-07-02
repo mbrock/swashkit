@@ -7,120 +7,118 @@ const LazyPath = std.Build.LazyPath;
 
 pub const ConfigureLibFn = *const fn (*std.Build.Step.Compile, std.Build.ResolvedTarget) void;
 
-pub fn addXCFramework(b: *std.Build, options: XCFrameworkBuilder.Options) !*XCFrameworkStep {
-    var builder = try b.allocator.create(XCFrameworkBuilder);
-    builder.* = XCFrameworkBuilder.init(b, options);
+pub fn create(b: *std.Build, options: XCFrameworkOptions) !*XCFrameworkStep {
+    var builder = try b.allocator.create(@This());
+    builder.* = @This().init(b, options);
     return try builder.build();
 }
 
-pub const XCFrameworkBuilder = struct {
-    b: *std.Build,
+b: *std.Build,
+name: []const u8,
+optimize: std.builtin.OptimizeMode,
+root_source_file: []const u8,
+configure_lib: ConfigureLibFn,
+
+pub const XCFrameworkOptions = struct {
     name: []const u8,
     optimize: std.builtin.OptimizeMode,
     root_source_file: []const u8,
     configure_lib: ConfigureLibFn,
-
-    pub const Options = struct {
-        name: []const u8,
-        optimize: std.builtin.OptimizeMode,
-        root_source_file: []const u8,
-        configure_lib: ConfigureLibFn,
-    };
-
-    pub fn init(b: *std.Build, options: Options) XCFrameworkBuilder {
-        return .{
-            .b = b,
-            .name = options.name,
-            .optimize = options.optimize,
-            .root_source_file = options.root_source_file,
-            .configure_lib = options.configure_lib,
-        };
-    }
-
-    pub fn build(self: *XCFrameworkBuilder) !*XCFrameworkStep {
-        const libs = try self.createLibsForPlatforms();
-        const universal_lib = try self.createUniversalBinary(libs);
-        const libtool = try self.createLibtoolBundle(universal_lib, libs);
-        return self.createXCFramework(libtool);
-    }
-
-    fn createLibsForPlatforms(self: *XCFrameworkBuilder) ![]const *std.Build.Step.Compile {
-        const targets = [_]std.zig.CrossTarget{
-            .{ .cpu_arch = .aarch64, .os_tag = .macos },
-            .{ .cpu_arch = .x86_64, .os_tag = .macos },
-        };
-        var libs = try self.b.allocator.alloc(*std.Build.Step.Compile, targets.len);
-        for (targets, 0..) |target, i| {
-            libs[i] = self.createStaticLib(target);
-        }
-        return libs;
-    }
-
-    fn createStaticLib(self: *XCFrameworkBuilder, target_query: std.zig.CrossTarget) *std.Build.Step.Compile {
-        const target = self.b.resolveTargetQuery(target_query);
-        const lib = self.b.addStaticLibrary(.{
-            .name = self.b.fmt("{s}-{s}", .{ self.name, target.result.osArchName() }),
-            .root_source_file = self.b.path(self.root_source_file),
-            .target = target,
-            .optimize = self.optimize,
-        });
-
-        lib.bundle_compiler_rt = true;
-        lib.linkLibC();
-
-        self.configure_lib(lib, target);
-        return lib;
-    }
-
-    fn createUniversalBinary(self: *XCFrameworkBuilder, libs: []const *std.Build.Step.Compile) !*LipoStep {
-        var inputs = try self.b.allocator.alloc(std.Build.LazyPath, libs.len);
-        for (libs, 0..) |lib, i| {
-            inputs[i] = lib.getEmittedBin();
-        }
-
-        return LipoStep.create(self.b, .{
-            .name = self.b.fmt("{s}-universal", .{self.name}),
-            .out_name = self.b.fmt("lib{s}.a", .{self.name}),
-            .inputs = inputs,
-        });
-    }
-
-    fn createLibtoolBundle(self: *XCFrameworkBuilder, universal_lib: *LipoStep, libs: []const *std.Build.Step.Compile) !*LibtoolStep {
-        var sources = std.ArrayList(std.Build.LazyPath).init(self.b.allocator);
-        try sources.append(universal_lib.output);
-
-        for (libs) |lib| {
-            for (lib.root_module.link_objects.items) |item| switch (item) {
-                .other_step => |step| {
-                    try sources.append(step.getEmittedBin());
-                },
-                else => {},
-            };
-        }
-
-        const libtool = LibtoolStep.create(self.b, .{
-            .name = self.name,
-            .out_name = self.b.fmt("{s}-bundle.a", .{self.name}),
-            .sources = sources.items,
-        });
-
-        libtool.step.dependOn(universal_lib.step);
-
-        return libtool;
-    }
-
-    fn createXCFramework(self: *XCFrameworkBuilder, libtool: *LibtoolStep) *XCFrameworkStep {
-        const xcframework = XCFrameworkStep.create(self.b, .{
-            .name = self.name,
-            .out_path = self.b.fmt("build/{s}.xcframework", .{self.name}),
-            .library = libtool.output,
-            .headers = self.b.path("include"),
-        });
-        xcframework.step.dependOn(libtool.step);
-
-        return xcframework;
-    }
 };
+
+pub fn init(b: *std.Build, options: XCFrameworkOptions) @This() {
+    return .{
+        .b = b,
+        .name = options.name,
+        .optimize = options.optimize,
+        .root_source_file = options.root_source_file,
+        .configure_lib = options.configure_lib,
+    };
+}
+
+pub fn build(self: *@This()) !*XCFrameworkStep {
+    const libs = try self.createLibsForPlatforms();
+    const universal_lib = try self.createUniversalBinary(libs);
+    const libtool = try self.createLibtoolBundle(universal_lib, libs);
+    return self.createXCFramework(libtool);
+}
+
+fn createLibsForPlatforms(self: *@This()) ![]const *std.Build.Step.Compile {
+    const targets = [_]std.zig.CrossTarget{
+        .{ .cpu_arch = .aarch64, .os_tag = .macos },
+        .{ .cpu_arch = .x86_64, .os_tag = .macos },
+    };
+    var libs = try self.b.allocator.alloc(*std.Build.Step.Compile, targets.len);
+    for (targets, 0..) |target, i| {
+        libs[i] = self.createStaticLib(target);
+    }
+    return libs;
+}
+
+fn createStaticLib(self: *@This(), target_query: std.zig.CrossTarget) *std.Build.Step.Compile {
+    const target = self.b.resolveTargetQuery(target_query);
+    const lib = self.b.addStaticLibrary(.{
+        .name = self.b.fmt("{s}-{s}", .{ self.name, target.result.osArchName() }),
+        .root_source_file = self.b.path(self.root_source_file),
+        .target = target,
+        .optimize = self.optimize,
+    });
+
+    lib.bundle_compiler_rt = true;
+    lib.linkLibC();
+
+    self.configure_lib(lib, target);
+    return lib;
+}
+
+fn createUniversalBinary(self: *@This(), libs: []const *std.Build.Step.Compile) !*LipoStep {
+    var inputs = try self.b.allocator.alloc(std.Build.LazyPath, libs.len);
+    for (libs, 0..) |lib, i| {
+        inputs[i] = lib.getEmittedBin();
+    }
+
+    return LipoStep.create(self.b, .{
+        .name = self.b.fmt("{s}-universal", .{self.name}),
+        .out_name = self.b.fmt("lib{s}.a", .{self.name}),
+        .inputs = inputs,
+    });
+}
+
+fn createLibtoolBundle(self: *@This(), universal_lib: *LipoStep, libs: []const *std.Build.Step.Compile) !*LibtoolStep {
+    var sources = std.ArrayList(std.Build.LazyPath).init(self.b.allocator);
+    try sources.append(universal_lib.output);
+
+    for (libs) |lib| {
+        for (lib.root_module.link_objects.items) |item| switch (item) {
+            .other_step => |step| {
+                try sources.append(step.getEmittedBin());
+            },
+            else => {},
+        };
+    }
+
+    const libtool = LibtoolStep.create(self.b, .{
+        .name = self.name,
+        .out_name = self.b.fmt("{s}-bundle.a", .{self.name}),
+        .sources = sources.items,
+    });
+
+    libtool.step.dependOn(universal_lib.step);
+
+    return libtool;
+}
+
+fn createXCFramework(self: *@This(), libtool: *LibtoolStep) *XCFrameworkStep {
+    const xcframework = XCFrameworkStep.create(self.b, .{
+        .name = self.name,
+        .out_path = self.b.fmt("build/{s}.xcframework", .{self.name}),
+        .library = libtool.output,
+        .headers = self.b.path("include"),
+    });
+    xcframework.step.dependOn(libtool.step);
+
+    return xcframework;
+}
 
 pub const XCFrameworkStep = struct {
     step: *Step,
